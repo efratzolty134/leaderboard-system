@@ -136,7 +136,7 @@ docker-compose logs -f redis
 
 ## API Endpoints
 
-### `POST /users` -> Create a new user.
+### 'POST /users' -> Create a new user.
 
 **Request Body:**
 {
@@ -147,7 +147,7 @@ docker-compose logs -f redis
 
 ---
 
-### `POST /users/:id/score` -> Update a user's score.
+### 'POST /users/:id/score' -> Update a user's score.
 
 **Path Parameter:**
 - `id`: User ID
@@ -160,11 +160,11 @@ docker-compose logs -f redis
 ```
 ---
 
-### `GET /leaderboard/top/:n` - > Retrieve the top `n` users in the leaderboard.
+### 'GET /leaderboard/top/:n' - > Retrieve the top 'n' users in the leaderboard.
 
 ---
 
-### `GET /leaderboard/user/:id/context` -> Get a user's ranking and surrounding users (up to 5 above and 5 bgitelow).
+### 'GET /leaderboard/user/:id/context' -> Get a user's ranking and surrounding users (up to 5 above and 5 bgitelow).
 
 ---
 
