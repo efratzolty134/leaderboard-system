@@ -64,15 +64,14 @@
                     └─────────────────────┘
 
 Performance Characteristics:
-┌────────────────┬──────────────────┬──────────────────┐
-│   Operation    │   Data Source    │   Time Complexity│
-├────────────────┼──────────────────┼──────────────────┤
-│ Get Top 100    │ Redis ZSET+HASH  │ O(log N + 100)   │
-│ Get User Rank  │ Redis ZSET       │ O(log N)         │
-│ Add User       │ PostgreSQL+Redis │ O(log N)         │
-│ Update Score   │ PostgreSQL+Redis │ O(log N)         │
-│ User Context   │ Redis ZSET+HASH  │ O(log N + 11)    │
-└────────────────┴──────────────────┴──────────────────┘
+
+| Operation        | Data Source        | Time Complexity |
+| ---------------- | ------------------ | --------------- |
+| Get Top 100      | Redis ZSET + HASH  | O(log N + 100)  |
+| Get User Rank    | Redis ZSET         | O(log N)        |
+| Add User         | PostgreSQL + Redis | O(log N)        |
+| Update Score     | PostgreSQL + Redis | O(log N)        |
+| Get User Context | Redis ZSET + HASH  | O(log N + 11)   |
 
 
 ### PostgreSQL Schema (Source of Truth)
