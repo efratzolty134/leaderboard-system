@@ -70,7 +70,7 @@ Key features include user creation, score updates, top-N retrieval, and contextu
 -- Users table: Core entity storing all user data
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,           -- Auto-incrementing primary key
-    user_name TEXT NOT NULL UNIQUE,       -- Username (unique constraint)
+    user_name TEXT NOT NULL UNIQUE,       -- Username (unique constraint)git
     image_url TEXT,                       -- Profile image URL (nullable)
     total_score INTEGER NOT NULL DEFAULT 0 -- User's current score
 );
@@ -89,7 +89,7 @@ This index allows efficient retrieval of users ordered by score (and user ID as 
 - **Parallel Processing**: Leaderboard ranks and user metadata are retrieved in parallel from separate Redis structures, minimizing latency and offloading load from the database.
 
 ### Local Deployment (via Docker Compose)
-🚀 Deployment & Usage (Local Environment)
+Deployment & Usage (Local Environment)
 This project supports local deployment using Docker and Docker Compose.
 
 Prerequisites
@@ -117,26 +117,26 @@ Once all services are up, access the API at:
 http://localhost:3000
 
 ### Development Commands
-# Start services in foreground (with logs)
+## Start services in foreground (with logs)
 docker-compose up
 
-# Rebuild and start services
+## Rebuild and start services
 docker-compose up --build
 
-# Stop all services
+## Stop all services
 docker-compose down
 
-# Stop and remove all data
+## Stop and remove all data
 docker-compose down -v
 
-# View logs
+## View logs
 docker-compose logs -f api
 docker-compose logs -f postgres
 docker-compose logs -f redis
 
-## API Endpoints
+### API Endpoints
 
-### `POST /users` -> Create a new user.
+# `POST /users` -> Create a new user.
 
 **Request Body:**
 {
@@ -147,7 +147,7 @@ docker-compose logs -f redis
 
 ---
 
-### `POST /users/:id/score` -> Update a user's score.
+# `POST /users/:id/score` -> Update a user's score.
 
 **Path Parameter:**
 - `id`: User ID
@@ -160,15 +160,15 @@ docker-compose logs -f redis
 ```
 ---
 
-### `GET /leaderboard/top/:n` - > Retrieve the top `n` users in the leaderboard.
+# `GET /leaderboard/top/:n` - > Retrieve the top `n` users in the leaderboard.
 
 ---
 
-### `GET /leaderboard/user/:id/context` -> Get a user's ranking and surrounding users (up to 5 above and 5 below).
+# `GET /leaderboard/user/:id/context` -> Get a user's ranking and surrounding users (up to 5 above and 5 below).
 
 ---
 
-## Environment Variables
+### Environment Variables
 The application requires the following environment variables. You can provide them via a `.env` file or directly in your deployment environment.
 
 | Variable       | Description              | Default             |
@@ -195,17 +195,19 @@ This project is designed with Kubernetes compatibility in mind:
 - **Resource efficiency**: Alpine Linux base images
 
 ### AWS Cloud Architecture
+
 This system is designed to scale effectively in a production-grade cloud environment using AWS-managed services. Below is a proposed architecture mapping local components to their cloud-native equivalents:
 
-| **Component**         | **Local Implementation**    | **AWS Equivalent**    **Purpose**                                         |
-| --------------------- | --------------------------- | ------------------------------------- | -------------------------------------- |
-| API Server            | Node.js + Express in Docker | ECS (Fargate) or EKS                  | Deploy scalable stateless containers   |
-| Reverse Proxy/API     | Express Routes              | API Gateway                           | Entry point for REST API traffic       |
-| Relational Database   | PostgreSQL                  | Amazon RDS (PostgreSQL)               | Managed relational database            |
-| In-Memory Cache       | Redis                       | Amazon ElastiCache (Redis)            | High-speed cache for leaderboard reads |
-| Environment Variables | .env file                   | AWS Secrets Manager / Parameter Store | Secure config management               |
-| Container Build       | Dockerfile                  | ECS Task Definition                   | Describes app container for deployment |
-| Service Orchestration | docker-compose              | ECS Service or CloudFormation         | Manage multi-container deployment      |
+| Component              | Local Implementation            | AWS Equivalent                     | Purpose                                                             |
+|------------------------|----------------------------------|------------------------------------|---------------------------------------------------------------------|
+| API Server             | Node.js + Express in Docker     | ECS (Fargate) or EKS               | Deploy scalable stateless containers                               |
+| Reverse Proxy / API    | Express Routes                  | API Gateway                        | Entry point for REST API traffic                                   |
+| Relational Database    | PostgreSQL                      | Amazon RDS (PostgreSQL)            | Managed relational database                                         |
+| In-Memory Cache        | Redis                           | Amazon ElastiCache (Redis)         | High-speed cache for leaderboard reads                             |
+| Environment Variables  | `.env` file                     | AWS Secrets Manager / Parameter Store | Secure configuration management                                 |
+| Container Build        | Dockerfile                      | ECS Task Definition                | Defines how to build/deploy containerized app                      |
+| Service Orchestration  | docker-compose                  | ECS Service or CloudFormation      | Manage multi-container deployment                                  |
+
 
 
 #### Future Enhancement
