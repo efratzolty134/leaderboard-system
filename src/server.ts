@@ -1,0 +1,17 @@
+/**
+ * Entry point of the application
+ * 
+ * Starts the Express server on the configured port.
+ * Loads and uses the main app defined in app.ts.
+ */
+
+import app from './app';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
