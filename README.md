@@ -1,9 +1,9 @@
 
-#### User Leaderboard System
+## User Leaderboard System
 A high-performance leaderboard API built with Node.js, PostgreSQL, and Redis, designed for Kubernetes deployment.
 Key features include user creation, score updates, top-N retrieval, and contextual leaderboard views.
 
-# System Design & Architecture        
+## System Design & Architecture        
                     ┌─────────────────────────────────────┐
                     │           CLIENT LAYER              │
                     │                                     │
@@ -65,7 +65,7 @@ Key features include user creation, score updates, top-N retrieval, and contextu
                     │ Fallback: Full DB   │
                     └─────────────────────┘
 
-### PostgreSQL Schema (Source of Truth)
+## PostgreSQL Schema (Source of Truth)
 
 -- Users table: Core entity storing all user data
 CREATE TABLE users (
@@ -80,7 +80,7 @@ CREATE INDEX CONCURRENTLY idx_users_score_desc
 ON users (total_score DESC, user_id ASC);
 This index allows efficient retrieval of users ordered by score (and user ID as a tiebreaker)
 
-### Scalability Design Decisions:
+## Scalability Design Decisions:
 
 - **Hybrid Architecture**: Combines Redis (for fast, in-memory access) with PostgreSQL (for durability and long-term storage), balancing performance with reliability.
 - **Sorted Sets**: Used in Redis to store user scores, enabling O(log N) operations for both ranking lookups and score updates — highly efficient for leaderboard logic.
@@ -88,7 +88,7 @@ This index allows efficient retrieval of users ordered by score (and user ID as 
 - **Hash Storage**: User metadata (name, image) is stored in Redis Hashes, enabling O(1) access and batch retrievals via HMGET method, reducing lookup overhead.
 - **Parallel Processing**: Leaderboard ranks and user metadata are retrieved in parallel from separate Redis structures, minimizing latency and offloading load from the database.
 
-### Local Deployment (via Docker Compose)
+## Local Deployment (via Docker Compose)
 Deployment & Usage (Local Environment)
 This project supports local deployment using Docker and Docker Compose.
 
@@ -116,27 +116,27 @@ This will:
 Once all services are up, access the API at:
 http://localhost:3000
 
-### Development Commands
-## Start services in foreground (with logs)
+## Development Commands
+### Start services in foreground (with logs)
 docker-compose up
 
-## Rebuild and start services
+### Rebuild and start services
 docker-compose up --build
 
-## Stop all services
+### Stop all services
 docker-compose down
 
-## Stop and remove all data
+### Stop and remove all data
 docker-compose down -v
 
-## View logs
+### View logs
 docker-compose logs -f api
 docker-compose logs -f postgres
 docker-compose logs -f redis
 
-### API Endpoints
+## API Endpoints
 
-# `POST /users` -> Create a new user.
+### `POST /users` -> Create a new user.
 
 **Request Body:**
 {
@@ -147,7 +147,7 @@ docker-compose logs -f redis
 
 ---
 
-# `POST /users/:id/score` -> Update a user's score.
+### `POST /users/:id/score` -> Update a user's score.
 
 **Path Parameter:**
 - `id`: User ID
@@ -160,15 +160,15 @@ docker-compose logs -f redis
 ```
 ---
 
-# `GET /leaderboard/top/:n` - > Retrieve the top `n` users in the leaderboard.
+### `GET /leaderboard/top/:n` - > Retrieve the top `n` users in the leaderboard.
 
 ---
 
-# `GET /leaderboard/user/:id/context` -> Get a user's ranking and surrounding users (up to 5 above and 5 below).
+### `GET /leaderboard/user/:id/context` -> Get a user's ranking and surrounding users (up to 5 above and 5 bgitelow).
 
 ---
 
-### Environment Variables
+## Environment Variables
 The application requires the following environment variables. You can provide them via a `.env` file or directly in your deployment environment.
 
 | Variable       | Description              | Default             |
@@ -182,19 +182,19 @@ The application requires the following environment variables. You can provide th
 | `REDIS_URL`    | Redis connection URL     | `redis://redis:6379` |
 
 
-### Container Health Checks
+## Container Health Checks
 API: HTTP GET to http://localhost:3000/
 PostgreSQL: pg_isready command
 Redis: redis-cli ping command
 
-### Kubernetes-Ready
+## Kubernetes-Ready
 This project is designed with Kubernetes compatibility in mind:
 - **Stateless API Container**: All data is stored externally in PostgreSQL and Redis
 - **Health Checks**: Included for readiness/liveness probes.
 - **Non-root User**: Follows container security best practices.
 - **Resource efficiency**: Alpine Linux base images
 
-### AWS Cloud Architecture
+## AWS Cloud Architecture
 
 This system is designed to scale effectively in a production-grade cloud environment using AWS-managed services. Below is a proposed architecture mapping local components to their cloud-native equivalents:
 
@@ -210,5 +210,5 @@ This system is designed to scale effectively in a production-grade cloud environ
 
 
 
-#### Future Enhancement
+## Future Enhancement
 While the system uses Redis as a high-performance cache for the top 10,000 users, it does not yet include a background process to periodically sync the cache with PostgreSQL. In the meantime a manual syncCacheFromDB()() function is provided in src/services/leaderboardService and can be used to repopulate the cache from the database as needed.
