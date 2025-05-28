@@ -4,11 +4,8 @@ FROM node:18-alpine
 # Set working directory inside container
 WORKDIR /app
 
-# Copy package files first (for better Docker layer caching)
 COPY package*.json ./
-
-# Install production dependencies only
-RUN npm ci --only=production
+RUN npm ci 
 
 # Copy source code
 COPY src/ ./src/

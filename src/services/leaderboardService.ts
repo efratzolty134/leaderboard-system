@@ -41,7 +41,7 @@ export class LeaderboardService{
   ) {}
 
 /** First service - Add a new user with a score to postgreSQL and Redis*/
-  async  createUser(username: string, score: number, imageUrl: string): Promise<void> {
+  async createUser(username: string, score: number, imageUrl: string): Promise<void> {
 
     LeaderboardService.validateUsername(username);
     LeaderboardService.validateScore(score);
@@ -53,12 +53,12 @@ export class LeaderboardService{
     try {
       await client.query('BEGIN');
       
-      const result = await pool.query(
+      const result = await client.query(
       'INSERT INTO users (user_name, total_score, image_url) VALUES ($1, $2, $3) RETURNING user_id',
       [username, score, imageUrl]
     );
 
-    const user_id = result.rows[0].id;
+    const user_id = result.rows[0].user_id;
 
     // Step 2: Add to Redis sorted set and hash
     await Promise.all([
@@ -75,10 +75,10 @@ export class LeaderboardService{
       console.log(`User added successfully: ${username} (ID: ${user_id}, Score: ${score})`);
       } 
       
-    catch (error) {
+    catch (err) {
       await client.query('ROLLBACK');
-      console.error('Error adding user:', error);
-      throw error;
+      console.error('Error adding user:', err);
+      throw err;
     } 
 
     finally {
@@ -102,11 +102,11 @@ export class LeaderboardService{
 
     // Step 1: update user's score in PostgreSQL
     const result = await client.query(
-      'UPDATE users SET total_score = $1 WHERE id = $2',
+      'UPDATE users SET total_score = $1 WHERE user_id = $2',
       [newScore, user_id]
     );
 
-     if (result.rows.length === 0) {
+     if (result.rowCount === 0) {
         throw new Error(`User with ID ${user_id} not found`);
       }
 
@@ -119,11 +119,11 @@ export class LeaderboardService{
     console.log(`Score updated successfully for user: ${user_id}, New Score: ${newScore})`);
   }
 
-  catch{
-    await client.query('ROLLBACK');
-    console.error('Error updating user score:', Error);
-    throw Error;
-  }
+  catch (err) {
+  await client.query('ROLLBACK');
+  console.error('Error updating user score:', err);
+  throw err;
+}
 
   finally{
      client.release();
@@ -170,9 +170,9 @@ async getTopN(n: number = 100): Promise<UserWithRank[]> {
         total_score: scores[index] || 0
       }));
       
-    } catch (error) {
-      console.error('Error getting top users:', error);
-      throw error;
+    } catch (err) {
+      console.error('Error getting top users:', err);
+      throw err;
     }
   }
   
@@ -212,9 +212,9 @@ async  getUserAndSurroundings(user_id: number) {
       
       return { user, above, below };
       
-    } catch (error) {
-      console.error('Error getting user with context:', error);
-      throw error;
+    } catch (err) {
+      console.error('Error getting user with context:', err);
+      throw err;
     }
   }
 
@@ -255,10 +255,10 @@ private async getTopUsersFromDB(n: number): Promise<UserWithRank[]> {
       total_score: row.total_score
     }));
     
-  } catch (error) {
-    console.error('Error getting top users from database:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to get top users from database: ${error.message}`);
+  } catch (err) {
+    console.error('Error getting top users from database:', err);
+    if (err instanceof Error) {
+      throw new Error(`Failed to get top users from database: ${err.message}`);
     } 
     else {
     throw new Error('Failed to get top users from database: Unknown error');
@@ -278,39 +278,39 @@ private async getTopUsersFromDB(n: number): Promise<UserWithRank[]> {
       ]);
       
       // Get top users from PostgreSQL
-      const result = await this.db.query(`
-        SELECT user_id, user_name, image_url, total_score 
-        FROM users 
-        ORDER BY total_score DESC, user_id ASC 
-        LIMIT $1
-      `, [this.MAX_CACHE_SIZE]);
+      const users = await this.getTopUsersFromDB(this.MAX_CACHE_SIZE);
       
-      if (result.rows.length === 0) {
+      if (users.length === 0) {
         console.log('No users found in database');
         return;
-      }
+    }
       
-      // Batch insert into Redis using multi/exec
+      //Prepare Redis batch
       const multi = this.redis.multi();
       
-      result.rows.forEach(user => {
-        // Add to sorted set
-        multi.zAdd(this.REDIS_SORTED_SET, { score: user.total_score, value: user.user_id.toString() });
-        // Add user data to hash
-        multi.hSet(
-          this.REDIS_HASH,
-          user.user_id.toString(),
-          JSON.stringify({ name: user.user_name, image: user.image_url })
-        );
+      users.forEach(user => {
+      multi.zAdd(this.REDIS_SORTED_SET, {
+        score: user.total_score,
+        value: user.user_id.toString(),
       });
+      multi.hSet(this.REDIS_HASH, user.user_id.toString(), JSON.stringify({
+        name: user.user_name,
+        image: user.image_url || '',
+      }));
+    });
       
-      await multi.exec();
+    //xecute batch and check result
+    const execResult = await multi.exec();
+    if (!execResult) {
+      throw new Error('Redis multi.exec() failed or was aborted');
+    }
       
-      console.log(`Cache synced successfully: ${result.rows.length} users loaded`);
       
-    } catch (error) {
-      console.error('Error syncing cache from database:', error);
-      throw error;
+    console.log(`Cache synced successfully: ${users.length} users loaded`);
+      
+    } catch (err) {
+      console.error('Error syncing cache from database:', err);
+      throw err;
     }
   }
 
@@ -345,80 +345,91 @@ private async getTopUsersFromDB(n: number): Promise<UserWithRank[]> {
  /**
    * Fallback to PostgreSQL when user not in cache
    */
-  private async getUserContextFromDB(userId: number): Promise<UserContextResponse> {
-    const result = await this.db.query(`
-      WITH ranked_users AS (
-        SELECT 
-          user_id, user_name, image_url, total_score,
-          RANK() OVER (ORDER BY total_score DESC, user_id ASC) as position
-        FROM users
-      ),
-      user_context AS (
-        SELECT 
-          *,
-          LAG(user_id, 1) OVER (ORDER BY position) as prev_id_1,
-          LAG(user_id, 2) OVER (ORDER BY position) as prev_id_2,
-          LAG(user_id, 3) OVER (ORDER BY position) as prev_id_3,
-          LAG(user_id, 4) OVER (ORDER BY position) as prev_id_4,
-          LAG(user_id, 5) OVER (ORDER BY position) as prev_id_5,
-          LEAD(user_id, 1) OVER (ORDER BY position) as next_id_1,
-          LEAD(user_id, 2) OVER (ORDER BY position) as next_id_2,
-          LEAD(user_id, 3) OVER (ORDER BY position) as next_id_3,
-          LEAD(user_id, 4) OVER (ORDER BY position) as next_id_4,
-          LEAD(user_id, 5) OVER (ORDER BY position) as next_id_5
-        FROM ranked_users
-      )
-      SELECT * FROM user_context WHERE user_id = $1
-    `, [userId]);
-    
-    if (result.rows.length === 0) {
-      throw new Error(`User with ID ${userId} not found`);
-    }
-    
-    const userData = result.rows[0];
-    const user: UserWithRank = {
-      position: userData.position,
-      user_id: userData.user_id,
-      user_name: userData.user_name,
-      image_url: userData.image_url,
-      total_score: userData.total_score
-    };
-    
-    // Note: This is a simplified fallback - in a real implementation,
-    // you'd want to get the actual above/below users from the database
-    return {
-      user,
-      above: [], // Simplified for assignment
-      below: []  // Simplified for assignment
-    };
+ private async getUserContextFromDB(userId: number): Promise<UserContextResponse> {
+  const result = await this.db.query(`
+    WITH ranked_users AS (
+      SELECT 
+        user_id, user_name, image_url, total_score,
+        RANK() OVER (ORDER BY total_score DESC, user_id ASC) as position
+      FROM users
+    ),
+    target AS (
+      SELECT position FROM ranked_users WHERE user_id = $1
+    )
+    SELECT * FROM ranked_users
+    WHERE position BETWEEN (SELECT position FROM target) - 5
+                      AND (SELECT position FROM target) + 5
+    ORDER BY position;
+  `, [userId]);
+
+  const rows = result.rows;
+  const targetIndex = rows.findIndex(u => u.user_id === userId);
+
+  if (targetIndex === -1) {
+    throw new Error(`User with ID ${userId} not found`);
   }
 
- static validateScore(score: number): void {
-    // Check if score exists
-    if (score === undefined || score === null) {
-      throw new Error('Score is required');
-    }
+  const user: UserWithRank = {
+    user_id: rows[targetIndex].user_id,
+    user_name: rows[targetIndex].user_name,
+    image_url: rows[targetIndex].image_url || '',
+    total_score: rows[targetIndex].total_score,
+    position: rows[targetIndex].position
+  };
 
-    // Check if score is a number
-    if (typeof score !== 'number') {
-      throw new Error('Score must be a number');
-    }
+  const above: UserWithRank[] = rows
+    .slice(Math.max(0, targetIndex - 5), targetIndex)
+    .map((u, i) => ({
+      user_id: u.user_id,
+      user_name: u.user_name,
+      image_url: u.image_url || '',
+      total_score: u.total_score,
+      position: u.position
+    }));
 
-    // Check if score is not NaN
-    if (isNaN(score)) {
-      throw new Error('Score must be a valid number');
-    }
+  const below: UserWithRank[] = rows
+    .slice(targetIndex + 1, targetIndex + 6)
+    .map((u, i) => ({
+      user_id: u.user_id,
+      user_name: u.user_name,
+      image_url: u.image_url || '',
+      total_score: u.total_score,
+      position: u.position
+    }));
 
-    // Check if score is an integer
-    if (!Number.isInteger(score)) {
-      throw new Error('Score must be an integer');
-    }
+  return {
+    user,
+    above,
+    below
+  };
+}
 
-    // Check if score is non-negative (your business rule)
-    if (score < 0) {
-      throw new Error('Score must be non-negative');
-    }
+static validateScore(score: number): void {
+  // Check if score exists
+  if (score === undefined || score === null) {
+    throw new Error('Score is required');
   }
+
+  // Check if score is a number
+  if (typeof score !== 'number') {
+    throw new Error('Score must be a number');
+  }
+
+  // Check if score is not NaN
+  if (isNaN(score)) {
+    throw new Error('Score must be a valid number');
+  }
+
+  // Check if score is an integer
+  if (!Number.isInteger(score)) {
+    throw new Error('Score must be an integer');
+  }
+
+  // Check if score is non-negative (your business rule)
+  if (score < 0) {
+    throw new Error('Score must be non-negative');
+  }
+}
 
 static validateUserId(userId: number): void {
     // Check if userId exists
@@ -457,20 +468,20 @@ static validateImageUrl(imageUrl: string): void {
     }
   }
 
-  static validateUsername(username: string): void {
-    // Check if username exists
-    if (username === undefined || username === null) {
-      throw new Error('Username is required');
-    }
-
-    // Check if username is string
-    if (typeof username !== 'string') {
-      throw new Error('Username must be a string');
-    }
-
-    // Check if username is empty or only whitespace
-    if (username.trim().length === 0) {
-      throw new Error('Username cannot be empty');
-    }
+static validateUsername(username: string): void {
+  // Check if username exists
+  if (username === undefined || username === null) {
+    throw new Error('Username is required');
   }
+
+  // Check if username is string
+  if (typeof username !== 'string') {
+    throw new Error('Username must be a string');
   }
+
+  // Check if username is empty or only whitespace
+  if (username.trim().length === 0) {
+    throw new Error('Username cannot be empty');
+  }
+}
+}

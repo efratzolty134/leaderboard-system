@@ -1,5 +1,7 @@
-# explanation of the assignment
 
+#### User Leaderboard System
+A high-performance leaderboard API built with Node.js, PostgreSQL, and Redis, designed for Kubernetes deployment.
+Key features include user creation, score updates, top-N retrieval, and contextual leaderboard views.
 
 # System Design & Architecture        
                     ┌─────────────────────────────────────┐
@@ -63,17 +65,6 @@
                     │ Fallback: Full DB   │
                     └─────────────────────┘
 
-Performance Characteristics:
-
-| Operation        | Data Source        | Time Complexity |
-| ---------------- | ------------------ | --------------- |
-| Get Top 100      | Redis ZSET + HASH  | O(log N + 100)  |
-| Get User Rank    | Redis ZSET         | O(log N)        |
-| Add User         | PostgreSQL + Redis | O(log N)        |
-| Update Score     | PostgreSQL + Redis | O(log N)        |
-| Get User Context | Redis ZSET + HASH  | O(log N + 11)   |
-
-
 ### PostgreSQL Schema (Source of Truth)
 
 -- Users table: Core entity storing all user data
@@ -84,9 +75,10 @@ CREATE TABLE users (
     total_score INTEGER NOT NULL DEFAULT 0 -- User's current score
 );
 
--- Critical performance index for leaderboard queries
+-- To ensure fast leaderboard queries at scale, the following composite index is created on the users table:
 CREATE INDEX CONCURRENTLY idx_users_score_desc 
 ON users (total_score DESC, user_id ASC);
+This index allows efficient retrieval of users ordered by score (and user ID as a tiebreaker)
 
 ### Scalability Design Decisions:
 
@@ -96,11 +88,124 @@ ON users (total_score DESC, user_id ASC);
 - **Hash Storage**: User metadata (name, image) is stored in Redis Hashes, enabling O(1) access and batch retrievals via HMGET method, reducing lookup overhead.
 - **Parallel Processing**: Leaderboard ranks and user metadata are retrieved in parallel from separate Redis structures, minimizing latency and offloading load from the database.
 
-### Using the deployed system
+### Local Deployment (via Docker Compose)
+🚀 Deployment & Usage (Local Environment)
+This project supports local deployment using Docker and Docker Compose.
+
+Prerequisites
+Docker
+Docker Compose
+
+Quick Start
+Clone the repository and navigate to the project directory:
+git clone https://github.com/yourusername/leaderboard-system.git
+cd leaderboard-system
+
+Start all services (PostgreSQL, Redis, API server):
+docker compose up --build
+
+This will:
+
+- Build the Node.js app from the Dockerfile
+
+- Spin up PostgreSQL and Redis from official images
+
+- Initialize the database
+
+## Access the API
+Once all services are up, access the API at:
+http://localhost:3000
+
+### Development Commands
+# Start services in foreground (with logs)
+docker-compose up
+
+# Rebuild and start services
+docker-compose up --build
+
+# Stop all services
+docker-compose down
+
+# Stop and remove all data
+docker-compose down -v
+
+# View logs
+docker-compose logs -f api
+docker-compose logs -f postgres
+docker-compose logs -f redis
+
+## API Endpoints
+
+### `POST /users` -> Create a new user.
+
+**Request Body:**
+{
+  "username": "string",
+  "score": number,
+  "imageUrl": "string"
+}
+
+---
+
+### `POST /users/:id/score` -> Update a user's score.
+
+**Path Parameter:**
+- `id`: User ID
+
+**Request Body:**
+```
+{
+  "score": number
+}
+```
+---
+
+### `GET /leaderboard/top/:n` - > Retrieve the top `n` users in the leaderboard.
+
+---
+
+### `GET /leaderboard/user/:id/context` -> Get a user's ranking and surrounding users (up to 5 above and 5 below).
+
+---
+
+## Environment Variables
+The application requires the following environment variables. You can provide them via a `.env` file or directly in your deployment environment.
+
+| Variable       | Description              | Default             |
+|----------------|--------------------------|---------------------|
+| `PORT`         | API server port          | `3000`              |
+| `DB_HOST`      | PostgreSQL hostname      | `postgres`          |
+| `DB_PORT`      | PostgreSQL port          | `5432`              |
+| `DB_NAME`      | Database name            | `leaderboard`       |
+| `DB_USER`      | Database username        | `postgres`          |
+| `DB_PASSWORD`  | Database password        | `password`          |
+| `REDIS_URL`    | Redis connection URL     | `redis://redis:6379` |
 
 
+### Container Health Checks
+API: HTTP GET to http://localhost:3000/
+PostgreSQL: pg_isready command
+Redis: redis-cli ping command
 
+### Kubernetes-Ready
+This project is designed with Kubernetes compatibility in mind:
+- **Stateless API Container**: All data is stored externally in PostgreSQL and Redis
+- **Health Checks**: Included for readiness/liveness probes.
+- **Non-root User**: Follows container security best practices.
+- **Resource efficiency**: Alpine Linux base images
 
+### AWS Cloud Architecture
+This system is designed to scale effectively in a production-grade cloud environment using AWS-managed services. Below is a proposed architecture mapping local components to their cloud-native equivalents:
+
+| **Component**         | **Local Implementation**    | **AWS Equivalent**    **Purpose**                                         |
+| --------------------- | --------------------------- | ------------------------------------- | -------------------------------------- |
+| API Server            | Node.js + Express in Docker | ECS (Fargate) or EKS                  | Deploy scalable stateless containers   |
+| Reverse Proxy/API     | Express Routes              | API Gateway                           | Entry point for REST API traffic       |
+| Relational Database   | PostgreSQL                  | Amazon RDS (PostgreSQL)               | Managed relational database            |
+| In-Memory Cache       | Redis                       | Amazon ElastiCache (Redis)            | High-speed cache for leaderboard reads |
+| Environment Variables | .env file                   | AWS Secrets Manager / Parameter Store | Secure config management               |
+| Container Build       | Dockerfile                  | ECS Task Definition                   | Describes app container for deployment |
+| Service Orchestration | docker-compose              | ECS Service or CloudFormation         | Manage multi-container deployment      |
 
 
 #### Future Enhancement
