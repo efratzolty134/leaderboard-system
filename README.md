@@ -68,17 +68,18 @@ Key features include user creation, score updates, top-N retrieval, and contextu
 ## PostgreSQL Schema (Source of Truth)
 
 -- Users table: Core entity storing all user data
+```sql
 CREATE TABLE users (
-    user_id SERIAL PRIMARY KEY,           -- Auto-incrementing primary key
-    user_name TEXT NOT NULL UNIQUE,       -- Username (unique constraint)git
-    image_url TEXT,                       -- Profile image URL (nullable)
-    total_score INTEGER NOT NULL DEFAULT 0 -- User's current score
+  user_id SERIAL PRIMARY KEY,            -- Auto-incrementing primary key
+  user_name TEXT NOT NULL UNIQUE,        -- Username (unique constraint)
+  image_url TEXT,                        -- Profile image URL (nullable)
+  total_score INTEGER NOT NULL DEFAULT 0 -- User's current score
 );
 
--- To ensure fast leaderboard queries at scale, the following composite index is created on the users table:
+-- To ensure fast leaderboard queries at scale, the following composite index is created:
 CREATE INDEX CONCURRENTLY idx_users_score_desc 
 ON users (total_score DESC, user_id ASC);
-This index allows efficient retrieval of users ordered by score (and user ID as a tiebreaker)
+```
 
 ## Scalability Design Decisions:
 
@@ -92,20 +93,19 @@ This index allows efficient retrieval of users ordered by score (and user ID as 
 Deployment & Usage (Local Environment)
 This project supports local deployment using Docker and Docker Compose.
 
-Prerequisites
-Docker
-Docker Compose
+**Prerequisites**
+- Docker
+- Docker Compose
 
-Quick Start
-Clone the repository and navigate to the project directory:
-git clone https://github.com/yourusername/leaderboard-system.git
-cd leaderboard-system
-
-Start all services (PostgreSQL, Redis, API server):
-docker compose up --build
-
+**Quick Start**
+- Clone the repository and navigate to the project directory:
+- git clone https://github.com/yourusername/leaderboard-system.git
+- cd leaderboard-system
+- Start all services (PostgreSQL, Redis, API server):
+```bash
+    docker compose up --build
+```
 This will:
-
 - Build the Node.js app from the Dockerfile
 
 - Spin up PostgreSQL and Redis from official images
@@ -130,24 +130,28 @@ docker-compose down
 docker-compose down -v
 
 ### View logs
-docker-compose logs -f api
-docker-compose logs -f postgres
-docker-compose logs -f redis
+- docker-compose logs -f api
+- docker-compose logs -f postgres
+- docker-compose logs -f redis
 
 ## API Endpoints
 
-### 'POST /users' -> Create a new user.
+**POST /users**
+Create a new user.
 
 **Request Body:**
-{
+```{
+```json
   "username": "string",
   "score": number,
   "imageUrl": "string"
 }
+```
 
 ---
 
-### 'POST /users/:id/score' -> Update a user's score.
+**POST /users/:id/score**
+Update a user's score.
 
 **Path Parameter:**
 - `id`: User ID
@@ -155,16 +159,19 @@ docker-compose logs -f redis
 **Request Body:**
 ```
 {
+```json
   "score": number
 }
 ```
 ---
 
-### 'GET /leaderboard/top/:n' - > Retrieve the top 'n' users in the leaderboard.
+**GET /leaderboard/top/:n**
+Retrieve the top 'n' users in the leaderboard.
 
 ---
 
-### 'GET /leaderboard/user/:id/context' -> Get a user's ranking and surrounding users (up to 5 above and 5 bgitelow).
+**GET /leaderboard/user/:id/context**
+Get a user's ranking and surrounding users (up to 5 above and 5 below).
 
 ---
 
@@ -183,9 +190,9 @@ The application requires the following environment variables. You can provide th
 
 
 ## Container Health Checks
-API: HTTP GET to http://localhost:3000/
-PostgreSQL: pg_isready command
-Redis: redis-cli ping command
+- API: HTTP GET to http://localhost:3000/
+- PostgreSQL: pg_isready command
+- Redis: redis-cli ping command
 
 ## Kubernetes-Ready
 This project is designed with Kubernetes compatibility in mind:
@@ -208,7 +215,31 @@ This system is designed to scale effectively in a production-grade cloud environ
 | Container Build        | Dockerfile                      | ECS Task Definition                | Defines how to build/deploy containerized app                      |
 | Service Orchestration  | docker-compose                  | ECS Service or CloudFormation      | Manage multi-container deployment                                  |
 
+## Testing
 
+Unit tests are not yet included, but the system is designed to support scalable and robust testing.
+
+### Recommended Edge Cases to Test:
+
+- **Redis Failover**  
+  Simulate Redis unavailability during peak traffic.  
+  _Expected:_ Fallback to PostgreSQL; API remains functional with degraded performance.
+
+- **Heavy Concurrent Access**  
+  Test with multiple simultaneous score updates and leaderboard reads.  
+  _Expected:_ Data consistency and no race conditions.
+
+- **Malformed or Incomplete Requests**  
+  Missing required fields (e.g., `score`, `user_id`) or incorrect data types.  
+  _Expected:_ Return `400 Bad Request` with clear validation errors.
+
+- **Top-N Beyond Cache Limit**  
+  Request top N users where N > `MAX_CACHE_SIZE`.  
+  _Expected:_ Serve from PostgreSQL fallback and ensure stable performance.
+
+- **Leaderboard Ties**  
+  Multiple users with the same score.  
+  _Expected:_ Tie-breaking should work as defined (by `user_id`).
 
 ## Future Enhancement
 While the system uses Redis as a high-performance cache for the top 10,000 users, it does not yet include a background process to periodically sync the cache with PostgreSQL. In the meantime a manual syncCacheFromDB()() function is provided in src/services/leaderboardService and can be used to repopulate the cache from the database as needed.
